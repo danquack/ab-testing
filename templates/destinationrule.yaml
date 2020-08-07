@@ -1,0 +1,13 @@
+# See more at https://istio.io/docs/reference/config/networking/destination-rule/
+apiVersion: networking.istio.io/v1alpha3
+kind: DestinationRule
+metadata:
+  name: {{ include "canary-testing.fullname" . }}
+spec:
+  host: {{ include "canary-testing.fullname" . }}
+  subsets:
+  {{- range .Values.image.deployments }}
+  - name: {{ . | quote}}
+    labels:
+      version: {{ . | quote}}
+  {{- end}}
