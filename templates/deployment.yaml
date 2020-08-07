@@ -1,0 +1,75 @@
+{{- $root := . -}}
+{{- $name := include "canary-testing.fullname" . -}}
+{{- $labels := include "canary-testing.labels" . -}}
+{{- $selectorLabels := include "canary-testing.selectorLabels" . -}}
+{{- $serviceAccountName := include "canary-testing.serviceAccountName" . -}}
+{{- $deployments := $root.Values.image.deployments -}}
+{{- range $deployments }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: "{{ $name }}-{{ . }}"
+  labels:
+    {{- $labels | nindent 4 }}
+spec:
+{{- if not $root.Values.autoscaling.enabled }}
+  replicas: {{ $root.Values.replicaCount }}
+{{- end }}
+  selector:
+    matchLabels:
+      {{- $selectorLabels | nindent 6 }}
+  template:
+    metadata:
+    {{- with $root.Values.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+    {{- end }}
+      labels:
+        release: {{ . }}
+        {{- $selectorLabels | nindent 8 }}
+    spec:
+      {{- with $root.Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ $serviceAccountName }}
+      securityContext:
+        {{- toYaml $root.Values.podSecurityContext | nindent 8 }}
+      containers:
+        - name: {{ $root.Chart.Name }}
+          securityContext:
+            {{- toYaml $root.Values.securityContext | nindent 12 }}
+          {{- if eq . "canary" }}
+          image: "{{ $root.Values.image.repository }}:{{ $root.Values.image.canaryTag | default $root.Chart.AppVersion }}"
+          {{- else }}
+          image: "{{ $root.Values.image.repository }}:{{ $root.Values.image.tag | default $root.Chart.AppVersion }}"
+          {{ end }}
+          imagePullPolicy: {{ $root.Values.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: 9000
+              protocol: TCP
+          livenessProbe:
+            httpGet:
+              path: /
+              port: http
+          readinessProbe:
+            httpGet:
+              path: /
+              port: http
+          resources:
+            {{- toYaml $root.Values.resources | nindent 12 }}
+      {{- with $root.Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with $root.Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with $root.Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+---
+{{- end }}
